@@ -1,0 +1,68 @@
+name: 최적화된 EC2 배포
+run-name: 최적화된 EC2 배포를 실행합니다. 🚀
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./front
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v2
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20'
+
+      - name: 의존성 설치 및 빌드
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+
+      - name: 파일 XZ 압축
+        run: |
+          tar -cf - \
+            --exclude='.next/cache' \
+            --exclude='.next/static/development' \
+            --exclude='.next/server/pages/api' \
+            .next \
+            | xz -9e > next-build.tar.xz
+
+      - name: SSH 키 설정
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
+      - name: EC2에 압축 파일 전송 및 배포
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          scp -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no \
+            next-build.tar.xz $EC2_USER@$EC2_HOST:~/front/
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
+            cd ~/front && \
+            xz -d next-build.tar.xz && \
+            tar -xf next-build.tar && \
+            rm next-build.tar && \
+            yarn install --production --frozen-lockfile && \
+            pm2 stop frontend || true && \
+            pm2 delete frontend || true && \
+            pm2 start yarn --name 'frontend' -- start --port 8080
+          "
