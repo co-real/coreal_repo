@@ -1,9 +1,5 @@
-import axios from "axios";
+import { axiosInstance } from "../../utils/axiosInstance";
 import { useMutation } from "@tanstack/react-query";
-
-const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BASE_URL,
-});
 
 interface SignupData {
   email: string;
