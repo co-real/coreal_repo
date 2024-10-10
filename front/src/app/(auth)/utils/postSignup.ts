@@ -1,4 +1,4 @@
-import api from "@/apis/index";
+import axiosInstance from "@/libs/axiosInstance";
 import { useMutation } from "@tanstack/react-query";
 
 interface SignupData {
@@ -9,7 +9,7 @@ interface SignupData {
 }
 
 const signup = async (data: SignupData) => {
-  const response = await api.post("/auths/signup", data);
+  const response = await axiosInstance.post("/auths/signup", data);
   return response.data;
 };
 
